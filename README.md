@@ -1,102 +1,563 @@
 # Country Integration API
 
-A Spring Boot REST API that integrates with an external SOAP-based
-Country Information service and persists country information in MySQL.
+A Spring Boot REST API that integrates with an external SOAP-based Country Information service, retrieves country details, and persists the results in MySQL. The application exposes RESTful CRUD endpoints and includes automated tests, Docker support, and Kubernetes deployment resources.
 
-## 1. Overview
+## 1. Features
 
-The application exposes REST endpoints for managing country information.
-It retrieves country data from the SOAP service, maps the response into
-the application's domain model, and persists the data in a relational
-database.
-
-### Key Features
-
-- RESTful CRUD endpoints for country information.
-- Integration with an external SOAP service using a WSDL.
-- MySQL database persistence using Spring Data JPA.
+- RESTful API for creating, retrieving, updating, and deleting country records.
+- SOAP integration using a WSDL-based Country Information service.
+- Country name normalization before SOAP requests.
+- ISO country code lookup using the `CountryISOCode` operation.
+- Country details retrieval using the `FullCountryInfo` operation.
+- MySQL persistence using Spring Data JPA.
+- Country and language data models.
 - Request validation and centralized exception handling.
 - Configurable SOAP connection and request timeouts.
-- Application health endpoints using Spring Boot Actuator.
-- Automated unit, controller, and integration tests.
+- Health checks and metrics through Spring Boot Actuator.
+- Unit, controller, and integration tests.
 - Docker containerization.
 - Kubernetes deployment manifests and automation scripts.
 
 ## 2. Technology Stack
 
-- Java 25
-- Spring Boot
-- Maven
-- Spring Web
-- Spring Data JPA
-- MySQL
-- SOAP / WSDL
-- Spring Boot Actuator
-- JUnit and Mockito
-- H2 for automated tests
-- Docker
-- Kubernetes and Minikube
+| Technology | Purpose |
+|---|---|
+| Java 25 | Application development |
+| Spring Boot | Application framework |
+| Spring Web | REST API endpoints |
+| Spring Data JPA | Database persistence |
+| MySQL | Production database |
+| H2 | Automated testing database |
+| SOAP / WSDL | External country information integration |
+| JUnit and Mockito | Automated testing |
+| Spring Boot Actuator | Health checks and metrics |
+| Maven | Dependency management and builds |
+| Docker | Application containerization |
+| Kubernetes | Container orchestration |
+| Minikube | Local Kubernetes environment |
 
 ## 3. Architecture
 
-The application follows a layered architecture:
+The application follows a layered architecture to separate responsibilities and simplify testing and maintenance.
 
-1. **Controller layer** — exposes REST endpoints and handles HTTP requests.
-2. **Service layer** — coordinates SOAP integration and business logic.
-3. **SOAP client layer** — communicates with the external SOAP service.
-4. **Repository layer** — handles database operations using Spring Data JPA.
-5. **Entity and DTO layer** — represents persisted data and API requests
-   and responses.
-6. **Exception handling layer** — translates application failures into
-   appropriate HTTP responses.
+### Application layers
 
-Request flow:
+1. **Controller layer:** Receives HTTP requests, validates input, and returns HTTP responses.
+2. **Service layer:** Implements business logic and coordinates country lookups and persistence.
+3. **SOAP client layer:** Communicates with the external SOAP service.
+4. **Repository layer:** Provides database access through Spring Data JPA.
+5. **Model and DTO layer:** Represents country information, language information, and API request and response data.
+6. **Exception handling layer:** Converts application and integration failures into appropriate HTTP responses.
 
-REST Client → REST Controller → Service → SOAP Client / Repository
-→ MySQL Database
+### Request flow
+
+```text
+REST Client
+    |
+    v
+Country REST Controller
+    |
+    v
+Country Integration Service
+    |
+    +----> SOAP Country Information Service
+    |          |
+    |          +----> CountryISOCode
+    |          |
+    |          +----> FullCountryInfo
+    |
+    v
+Country and Language Mapping
+    |
+    v
+Spring Data JPA Repository
+    |
+    v
+MySQL Database
+```
+
+The application separates external service communication from persistence and HTTP handling, making the individual components easier to test and maintain.
 
 ## 4. Prerequisites
 
-Install the following:
+Install the following tools:
 
 - Java 25
-- Docker
-- MySQL
 - Git
+- MySQL
+- Docker
 
 For Kubernetes deployment, also install:
 
 - kubectl
 - Minikube
 
+Verify your Java and Maven wrapper setup:
+
+```bash
+java -version
+./mvnw -version
+```
+
 ## 5. Configuration
 
-Configure the following environment variables before starting the
-application:
+The application supports environment-based configuration.
 
-| Variable | Description |
-|---|---|
-| `DB_URL` | JDBC URL for the MySQL database |
-| `DB_USERNAME` | MySQL application username |
-| `DB_PASSWORD` | MySQL application password |
-| `SOAP_COUNTRY_INFO_URL` | External SOAP service endpoint |
-| `SOAP_CONNECT_TIMEOUT` | SOAP connection timeout in milliseconds |
-| `SOAP_REQUEST_TIMEOUT` | SOAP request timeout in milliseconds |
+| Variable | Description | Default |
+|---|---|---|
+| `DB_URL` | JDBC connection URL | Local MySQL database URL |
+| `DB_USERNAME` | MySQL username | `country_app` |
+| `DB_PASSWORD` | MySQL password | Must be configured |
+| `SOAP_COUNTRY_INFO_URL` | SOAP service endpoint | Country Information service endpoint |
+| `SOAP_CONNECT_TIMEOUT` | SOAP connection timeout in milliseconds | `5000` |
+| `SOAP_REQUEST_TIMEOUT` | SOAP request timeout in milliseconds | `10000` |
 
-The application defaults to port `8085`.
+The application listens on port `8085` by default.
 
-Do not commit database passwords or other credentials to source control.
+Example database URL:
 
-## 6. Running Locally
+```text
+jdbc:mysql://localhost:3306/country_integration?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+```
 
-Ensure the MySQL database and application user exist and have the
-necessary permissions.
 
-Export the database credentials:
+
+### Step 1: Configure MySQL
+
+Create the `country_integration` database and a dedicated application user. Grant that user the permissions required by the application.
+
+ SQL:
+
+```sql
+CREATE DATABASE country_integration;
+
+CREATE USER 'country_app'@'localhost'
+IDENTIFIED BY '';
+
+GRANT ALL PRIVILEGES ON country_integration.*
+TO 'country_app'@'localhost';
+
+FLUSH PRIVILEGES;
+```
+
+Adjust the MySQL host permissions if the application connects from a different host or network.
+
+### Step 2: Configure environment variables
+
+From the project root, run:
 
 ```bash
 export DB_URL='jdbc:mysql://localhost:3306/country_integration?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true'
 export DB_USERNAME='country_app'
-read -rsp "Database password: " DB_PASSWORD
+
+read -rsp "MySQL password: " DB_PASSWORD
 echo
 export DB_PASSWORD
+```
+
+Enter the password configured for your MySQL application user.
+
+### Step 3: Start the application
+
+```bash
+./mvnw spring-boot:run
+```
+
+The API should be available at:
+
+```text
+http://localhost:8085
+```
+
+### Step 4: Verify application health
+
+```bash
+curl -i http://localhost:8085/actuator/health
+```
+
+A healthy application returns HTTP `200 OK`.
+
+### Step 5: Run automated tests
+
+Execute the test suite:
+
+```bash
+./mvnw clean test
+```
+
+Build the application:
+
+```bash
+./mvnw package
+```
+
+The executable JAR will be generated under `target/`.
+
+When you no longer need the exported database password, remove it from the current shell:
+
+```bash
+unset DB_PASSWORD
+```
+
+##7  REST API Reference
+
+Base URL:
+
+```text
+http://localhost:8085/api/v1/countries
+```
+
+### Available endpoints
+
+| HTTP Method | Endpoint | Description | Success Status |
+|---|---|---|---|
+| POST | `/api/v1/countries` | Retrieve country details through SOAP and save the result | `201 Created` |
+| GET | `/api/v1/countries` | Retrieve all saved countries | `200 OK` |
+| GET | `/api/v1/countries/{id}` | Retrieve a country by database ID | `200 OK` |
+| PUT | `/api/v1/countries/{id}` | Update an existing country | `200 OK` |
+| DELETE | `/api/v1/countries/{id}` | Delete a country | `204 No Content` |
+
+###  Create a country
+
+**Request**
+
+```http
+POST /api/v1/countries
+Content-Type: application/json
+```
+
+Example request body:
+
+```json
+{
+  "name": "Tanzania"
+}
+```
+
+Example command:
+
+```bash
+curl -i -X POST http://localhost:8085/api/v1/countries \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Tanzania"}'
+```
+
+The application normalizes the country name and performs the following operations:
+
+1. Calls the SOAP `CountryISOCode` operation using `sCountryName`.
+2. Retrieves the ISO country code.
+3. Calls `FullCountryInfo` using `sCountryISOCode`.
+4. Maps the returned country and language information into application models.
+5. Persists the country information in MySQL.
+6. Returns the created resource.
+
+The response contains the country information returned by the integration service and saved by the application.
+
+### Retrieve all countries
+
+```bash
+curl -i http://localhost:8085/api/v1/countries
+```
+
+Returns the countries currently stored in the database.
+
+### Retrieve a country by ID
+
+Replace `1` with the ID of an existing record.
+
+```bash
+curl -i http://localhost:8085/api/v1/countries/1
+```
+
+If the requested country does not exist, the API returns `404 Not Found`.
+
+###  Update a country
+
+```bash
+curl -i -X PUT http://localhost:8085/api/v1/countries/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Tanzania"}'
+```
+
+Use the request fields defined by the application's update DTO. Adjust the example body if the DTO requires additional fields or uses a different structure.
+
+###  Delete a country
+
+```bash
+curl -i -X DELETE http://localhost:8085/api/v1/countries/1
+```
+
+A successful deletion returns `204 No Content`.
+
+### HTTP error handling
+
+| Status | Meaning |
+|---|---|
+| `400 Bad Request` | Invalid request or validation failure |
+| `404 Not Found` | Requested country does not exist |
+| `409 Conflict` | Database integrity conflict |
+| `502 Bad Gateway` | Failure communicating with the SOAP service |
+| `500 Internal Server Error` | Unexpected server-side error |
+
+## 8. SOAP Integration
+
+The application uses the Country Information SOAP service.
+
+**WSDL location in the project:**
+
+```text
+src/main/resources/wsdl/CountryInfoService.wsdl
+```
+
+**Default SOAP endpoint:**
+
+```text
+http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso
+```
+
+WSDL URL for inspection in SoapUI:
+
+```text
+http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso?WSDL
+```
+
+### Integration workflow
+
+The country lookup follows this sequence:
+
+1. Receive the country name from the REST client.
+2. Normalize the country name.
+3. Invoke `CountryISOCode` with the `sCountryName` parameter.
+4. Obtain the ISO country code from the SOAP response.
+5. Invoke `FullCountryInfo` with the `sCountryISOCode` parameter.
+6. Map the response into the application's country and language models.
+7. Persist the resulting information using Spring Data JPA.
+8. Return the result to the REST client.
+
+The endpoint and timeout values can be overridden through environment variables.
+
+```bash
+export SOAP_COUNTRY_INFO_URL='http://webservices.oorsprong.org/websamples.countryinfo/CountryInfoService.wso'
+export SOAP_CONNECT_TIMEOUT=5000
+export SOAP_REQUEST_TIMEOUT=10000
+```
+
+The SOAP service is an external dependency. New country lookups require the service to be reachable, while retrieval of previously saved records can be performed from the database.
+
+## 9. Testing
+
+The project includes automated tests for application behavior at different layers.
+
+| Test Type | Purpose |
+|---|---|
+| Unit tests | Validate service logic and business rules |
+| Controller tests | Verify HTTP endpoints, request validation, and responses |
+| Integration tests | Exercise the REST-to-service-to-repository flow |
+| Application context tests | Verify that the Spring application context starts correctly |
+
+The test profile uses H2 to support automated testing without requiring the production MySQL database.
+
+Run all tests:
+
+```bash
+./mvnw clean test
+```
+
+Run the country integration tests specifically:
+
+```bash
+./mvnw -Dtest=CountryIntegrationIT test
+```
+
+Build the application:
+
+```bash
+./mvnw clean package
+```
+
+## 10. Docker
+
+The application includes a Dockerfile that builds the application and packages it into a runtime image.
+
+### Step 1: Build the image
+
+Run from the project root:
+
+```bash
+docker build -t country-integration:1.0.0 .
+```
+
+### Step 2: Run the container
+
+The MySQL database must be reachable from inside the container. Remember that `localhost` inside a container refers to the container itself, not your host machine.
+
+```bash
+docker run --rm --name country-integration \
+  -p 8085:8085 \
+  -e DB_URL='jdbc:mysql://addr:3306/country_integration?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true' \
+  -e DB_USERNAME='country_app' \
+  -e DB_PASSWORD='' \
+  country-integration:1.0.0
+```
+
+Replace `addr` and the password placeholder with values appropriate for your environment.
+
+
+
+Check application health:
+
+```bash
+curl -i http://localhost:8085/actuator/health
+```
+
+## 11. Kubernetes Deployment
+
+The project contains Kubernetes manifests and automation scripts under `k8s/` and `scripts/`.
+
+### Prerequisites
+
+- A running Kubernetes cluster.
+- `kubectl` configured to access the cluster.
+- A MySQL instance accessible from the application pods.
+- The application image available to the cluster.
+- A database password stored in a Kubernetes Secret.
+
+### 11.1 Start Minikube
+
+```bash
+minikube start
+kubectl get nodes
+```
+
+Confirm that the node is ready.
+
+### 11.2 Configure the database connection
+
+Review:
+
+```text
+k8s/configmap.yaml
+```
+
+Ensure the database URL points to a MySQL host reachable from the Kubernetes pods. Do not use `localhost` unless MySQL runs in the same pod.
+
+Confirm that the MySQL account is permitted to connect from the Kubernetes network.
+
+### 11.3 Create the database Secret
+
+Create or update the Secret without writing the password into a manifest:
+
+```bash
+read -rsp "MySQL password for country_app: " DB_PASSWORD
+echo
+
+kubectl create secret generic country-integration-db \
+  --from-literal=DB_PASSWORD="$DB_PASSWORD" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+unset DB_PASSWORD
+```
+
+The Secret name and key must match the references in `k8s/deployment.yaml`.
+
+
+### 11.4 Build the image for Minikube
+
+Make the image available in Minikube's Docker environment:
+
+```bash
+eval "$(minikube docker-env)"
+docker build -t country-integration:1.0.0 .
+```
+
+
+### 11.5 Deploy the application
+
+Run the provided deployment script:
+
+```bash
+bash scripts/deploy-k8s.sh
+```
+
+If you need to apply the manifests manually:
+
+```bash
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+```
+
+### 11.6 Verify the deployment
+
+```bash
+kubectl get deployments
+kubectl get pods
+kubectl get services
+```
+
+Run the project's verification script:
+
+```bash
+bash scripts/verify-k8s.sh
+```
+
+Confirm that the deployment has available replicas and that the application pod is running and ready.
+
+### 11.7 Access the application
+
+Forward a local port to the Kubernetes service:
+
+```bash
+kubectl port-forward service/country-integration 18085:8085
+```
+
+Keep this command running. In another terminal, test the health endpoint:
+
+```bash
+curl -i http://localhost:18085/actuator/health
+```
+
+Test the API:
+
+```bash
+curl -i http://localhost:18085/api/v1/countries
+```
+
+If the Service has a different name in `k8s/service.yaml`, substitute that name in the port-forward command.
+
+
+### 11.8 SOAP requests fail
+
+Check that the SOAP endpoint is reachable from the cluster and that the configured URL is correct.
+
+Inspect application logs for SOAP faults, connection failures, or timeouts. Verify the timeout configuration and confirm that the upstream service is operational.
+
+The application should return an appropriate gateway error when an upstream SOAP failure prevents a country lookup.
+
+###  Port-forward fails
+
+If the selected local port is already in use, choose another port:
+
+```bash
+kubectl port-forward service/country-integration 18086:8085
+```
+
+Then use:
+
+```text
+http://localhost:18086
+```
+
+### 12.5 Inspect deployment status
+
+```bash
+kubectl rollout status deployment/country-integration
+kubectl describe deployment country-integration
+kubectl get pods -o wide
+kubectl get events --sort-by=.metadata.creationTimestamp
+```
+
+
+
+
+* Deployment commands and configuration values may need to be adjusted for your local environment or production infrastructure. Keep environment-specific credentials out of the repository.
