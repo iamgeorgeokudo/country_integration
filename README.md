@@ -87,7 +87,7 @@ Install the following tools:
 - MySQL
 - Docker
 
-For Kubernetes deployment, also install:
+For Kubernetes deployment,  install:
 
 - kubectl
 - Minikube
@@ -114,7 +114,7 @@ The application supports environment-based configuration.
 
 The application listens on port `8085` by default.
 
-Example database URL:
+ database URL:
 
 ```text
 jdbc:mysql://localhost:3306/country_integration?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
@@ -155,7 +155,6 @@ echo
 export DB_PASSWORD
 ```
 
-Enter the password configured for your MySQL application user.
 
 ### Step 3: Start the application
 
@@ -199,7 +198,7 @@ When you no longer need the exported database password, remove it from the curre
 unset DB_PASSWORD
 ```
 
-##7  REST API Reference
+## 7. REST API Reference
 
 Base URL:
 
@@ -217,7 +216,7 @@ http://localhost:8085/api/v1/countries
 | PUT | `/api/v1/countries/{id}` | Update an existing country | `200 OK` |
 | DELETE | `/api/v1/countries/{id}` | Delete a country | `204 No Content` |
 
-###  Create a country
+### 7.1 Create a country
 
 **Request**
 
@@ -226,7 +225,7 @@ POST /api/v1/countries
 Content-Type: application/json
 ```
 
-Example request body:
+ request body:
 
 ```json
 {
@@ -234,7 +233,7 @@ Example request body:
 }
 ```
 
-Example command:
+ command:
 
 ```bash
 curl -i -X POST http://localhost:8085/api/v1/countries \
@@ -253,7 +252,7 @@ The application normalizes the country name and performs the following operation
 
 The response contains the country information returned by the integration service and saved by the application.
 
-### Retrieve all countries
+### 7.2 Retrieve all countries
 
 ```bash
 curl -i http://localhost:8085/api/v1/countries
@@ -261,7 +260,7 @@ curl -i http://localhost:8085/api/v1/countries
 
 Returns the countries currently stored in the database.
 
-### Retrieve a country by ID
+### 7.3 Retrieve a country by ID
 
 Replace `1` with the ID of an existing record.
 
@@ -271,7 +270,7 @@ curl -i http://localhost:8085/api/v1/countries/1
 
 If the requested country does not exist, the API returns `404 Not Found`.
 
-###  Update a country
+### 7.4 Update a country
 
 ```bash
 curl -i -X PUT http://localhost:8085/api/v1/countries/1 \
@@ -279,9 +278,8 @@ curl -i -X PUT http://localhost:8085/api/v1/countries/1 \
   -d '{"name":"Tanzania"}'
 ```
 
-Use the request fields defined by the application's update DTO. Adjust the example body if the DTO requires additional fields or uses a different structure.
 
-###  Delete a country
+### 7.5 Delete a country
 
 ```bash
 curl -i -X DELETE http://localhost:8085/api/v1/countries/1
@@ -344,7 +342,7 @@ export SOAP_REQUEST_TIMEOUT=10000
 
 The SOAP service is an external dependency. New country lookups require the service to be reachable, while retrieval of previously saved records can be performed from the database.
 
-## 9. Testing
+## 9. Testing 
 
 The project includes automated tests for application behavior at different layers.
 
@@ -389,7 +387,6 @@ docker build -t country-integration:1.0.0 .
 
 ### Step 2: Run the container
 
-The MySQL database must be reachable from inside the container. Remember that `localhost` inside a container refers to the container itself, not your host machine.
 
 ```bash
 docker run --rm --name country-integration \
@@ -403,6 +400,12 @@ docker run --rm --name country-integration \
 Replace `addr` and the password placeholder with values appropriate for your environment.
 
 
+### Step 3: Check the container
+
+```bash
+docker ps
+docker logs country-integration
+```
 
 Check application health:
 
@@ -525,8 +528,54 @@ curl -i http://localhost:18085/api/v1/countries
 
 If the Service has a different name in `k8s/service.yaml`, substitute that name in the port-forward command.
 
+## 12. Kubernetes Troubleshooting
 
-### 11.8 SOAP requests fail
+### 12.1 Pod is not starting
+
+Check pod status and events:
+
+```bash
+kubectl get pods
+kubectl describe pod <pod-name>
+kubectl get events --sort-by=.metadata.creationTimestamp
+```
+
+Inspect the application logs:
+
+```bash
+kubectl logs <pod-name>
+```
+
+If the container has restarted, inspect its previous logs:
+
+```bash
+kubectl logs <pod-name> --previous
+```
+
+Look for missing configuration, database connection failures, image pull errors, or health probe failures.
+
+### 12.2 Database connection failures
+
+Check the following:
+
+- `DB_URL` points to the correct MySQL host and database.
+- The username and password match the configured database account.
+- The Secret exists and its name and key match the Deployment.
+- MySQL is listening on the expected interface and port.
+- Firewall and network rules allow connections from Kubernetes.
+- MySQL grants allow the application to connect from the pod or node network, rather than only from `localhost`.
+
+
+```bash
+kubectl describe deployment country-integration
+kubectl logs deployment/country-integration
+kubectl get configmap
+kubectl get secrets
+```
+
+The last command displays Secret names, not their values.
+
+### 12.3 SOAP requests fail
 
 Check that the SOAP endpoint is reachable from the cluster and that the configured URL is correct.
 
@@ -534,7 +583,7 @@ Inspect application logs for SOAP faults, connection failures, or timeouts. Veri
 
 The application should return an appropriate gateway error when an upstream SOAP failure prevents a country lookup.
 
-###  Port-forward fails
+### 12.4 Port-forward fails
 
 If the selected local port is already in use, choose another port:
 
@@ -557,7 +606,41 @@ kubectl get pods -o wide
 kubectl get events --sort-by=.metadata.creationTimestamp
 ```
 
+## 13. Reliability, Observability, and Scalability
+
+The application uses separate layers for request handling, business logic, SOAP integration, and database persistence. Configurable connection and request timeouts help prevent SOAP calls from waiting indefinitely.
+
+Spring Boot Actuator exposes health and metrics endpoints. Kubernetes startup, readiness, and liveness probes help determine whether a container has started, is ready to receive traffic, or needs restarting.
+
+The REST application is designed to avoid relying on in-memory session state, which supports horizontal scaling. Multiple replicas can be deployed when they share the appropriate database and configuration.
 
 
 
-* Deployment commands and configuration values may need to be adjusted for your local environment or production infrastructure. Keep environment-specific credentials out of the repository.
+## Project Structure
+
+```text
+country-integration/
+├── src/
+│   ├── main/
+│   │   ├── java/
+│   │   │   └── com/ncba/countryintegration/
+│   │   └── resources/
+│   │       └── wsdl/
+│   │           └── CountryInfoService.wsdl
+│   └── test/
+│       └── java/
+├── k8s/
+│   ├── configmap.yaml
+│   ├── deployment.yaml
+│   └── service.yaml
+├── scripts/
+│   ├── deploy-k8s.sh
+│   └── verify-k8s.sh
+├── Dockerfile
+├── .dockerignore
+├── .gitignore
+├── mvnw
+├── pom.xml
+└── README.md
+```
+
